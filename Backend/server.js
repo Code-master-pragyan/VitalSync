@@ -7,7 +7,6 @@ const LocalStrategy = require('passport-local').Strategy;
 const User = require('./models/User');
 const cors = require('cors');
 const authRoutes = require('./routes/auth');
-const aiRoutes = require('./routes/ai');
 
 const app = express();
 const PORT = 5000;
@@ -65,7 +64,6 @@ passport.deserializeUser(async (id, done) => {
 
 // Routes
 app.use('/api', authRoutes);
-app.use('/api/ai', aiRoutes);
 
 // Start
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
