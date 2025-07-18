@@ -1,16 +1,27 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const session = require('express-session');
-const MongoStore = require('connect-mongo');
-const passport = require('passport');
-const LocalStrategy = require('passport-local').Strategy;
-const User = require('./models/User');
-const cors = require('cors');
-const authRoutes = require('./routes/auth');
+import dotenv from 'dotenv';
+dotenv.config();
+
+import express from 'express';
+import path from "path";
+import { fileURLToPath } from "url";
+import mongoose from 'mongoose';
+import session from 'express-session';
+import MongoStore from 'connect-mongo';
+import passport from 'passport';
+import multer from "multer";
+import { Strategy as LocalStrategy } from 'passport-local';
+import User from './models/User.js';
+import cors from 'cors';
+import authRoutes from './routes/auth.js';
+import aiRoutes from './routes/ai.js';
+import diseaseRoutes from './routes/diseaseRoutes.js';
+import scanRoutes from "./routes/scan.js"
 
 const app = express();
 const PORT = 5000;
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // MongoDB connection
 mongoose.connect('mongodb://127.0.0.1:27017/healthcare', {
@@ -21,6 +32,7 @@ mongoose.connect('mongodb://127.0.0.1:27017/healthcare', {
 
 // Middleware
 app.use(express.json());
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(cors({
   origin: ['http://localhost:3000', 'http://localhost:5173'],
   credentials: true
@@ -64,6 +76,9 @@ passport.deserializeUser(async (id, done) => {
 
 // Routes
 app.use('/api', authRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/diseases', diseaseRoutes);
+app.use('/api/scan', scanRoutes);
 
 // Start
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

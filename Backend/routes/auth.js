@@ -1,6 +1,6 @@
-const express = require('express');
-const passport = require('passport');
-const User = require('../models/User');
+import express from 'express';
+import passport from 'passport';
+import User from '../models/User.js';
 const router = express.Router();
 
 // Signup
@@ -53,4 +53,4 @@ router.get('/current-user', (req, res) => {
   res.json({ success: false, user: null });
 });
 
-module.exports = router;
+export default router;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bot, BookOpen, Scan, MessageSquare, Search, Camera, MapPin, Clock, AlertTriangle, Pill, CheckCircle } from 'lucide-react';
 
 // Type definitions
@@ -17,6 +17,13 @@ interface Medicine {
   instructions: string;
   sideEffects: string[];
   warnings: string[];
+}
+
+interface NearbyHospital {
+  name: string;
+  lat: number;
+  lon: number;
+  distance: number;
 }
 
 // Predefined color classes (Tailwind-safe)
@@ -92,8 +99,8 @@ const Features: React.FC = () => {
                 key={feature.id}
                 onClick={() => setActiveFeature(feature.id)}
                 className={`flex items-center px-6 py-4 rounded-xl transition-all duration-300 ${isActive
-                    ? `${colors.bg} text-white shadow-lg`
-                    : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700'
+                  ? `${colors.bg} text-white shadow-lg`
+                  : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700'
                   }`}
               >
                 <Icon className={`h-6 w-6 mr-3 ${isActive ? 'text-white' : `${colors.text} ${colors.darkText}`}`} />
@@ -121,11 +128,154 @@ const AISymptomChecker: React.FC = () => {
     { type: 'bot', content: 'Hello! I\'m your AI health assistant. Tell me about any symptoms you\'re experiencing, and I\'ll help analyze them.' }
   ]);
   const [inputValue, setInputValue] = useState('');
+  const [isEmergency, setIsEmergency] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ lat: number, lon: number } | null>(null);
+  const [hospitals, setHospitals] = useState<NearbyHospital[]>([]);
+
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+
+  const checkForEmergency = (reply: string) => {
+    const emergencyKeywords = [
+      'seek immediate medical',
+      'call emergency',
+      'severe symptoms',
+      'life-threatening',
+      'serious condition',
+      'hospital right away',
+      'emergency services',
+    ];
+    return emergencyKeywords.some(keyword => reply.toLowerCase().includes(keyword));
+  };
+
+  const requestUserLocation = () => {
+    if (isMobile && navigator.geolocation) {
+      // 📱 Mobile: use device GPS
+      navigator.geolocation.getCurrentPosition(
+        position => {
+          const lat = position.coords.latitude;
+          const lon = position.coords.longitude;
+          console.log("📍 Mobile Location:", lat, lon);
+          setUserLocation({ lat, lon });
+          fetchNearbyHospitals(lat, lon);
+        },
+        (error) => {
+          console.error("❌ Mobile Geolocation failed:", error);
+        }
+      );
+    } else {
+      // 🖥️ Desktop: Ask for location name instead of lat/lon
+      const placeName = prompt("⚠️ Please enter your location name (e.g., Guwahati, Mumbai):");
+
+      if (placeName) {
+        geocodePlaceName(placeName.trim());
+      } else {
+        console.error("No location name provided.");
+      }
+    }
+  };
+
+  const geocodePlaceName = async (placeName: string) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(placeName)}&countrycodes=in`
+      );
+
+      const data = await response.json();
+
+      if (data.length > 0) {
+        const lat = parseFloat(data[0].lat);
+        const lon = parseFloat(data[0].lon);
+        console.log("🌍 Corrected Geocoded Location:", lat, lon);
+
+        setUserLocation({ lat, lon });
+        fetchNearbyHospitals(lat, lon);
+      } else {
+        console.error("❌ Location not found.");
+        alert("❌ Could not find location. Please try a valid place name.");
+      }
+    } catch (error) {
+      console.error("❌ Geocoding failed:", error);
+      alert("⚠️ Something went wrong while fetching location data.");
+    }
+  };
+
+
+
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371; // Earth's radius in KM
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return parseFloat((R * c).toFixed(2)); // Round to 2 decimals
+  };
+
+
+  const fetchNearbyHospitals = async (lat: number, lon: number) => {
+    try {
+      const radiusInMeters = 50000;
+
+      const query = `
+      [out:json];
+      (
+        node["amenity"="hospital"](around:${radiusInMeters},${lat},${lon});
+        way["amenity"="hospital"](around:${radiusInMeters},${lat},${lon});
+        relation["amenity"="hospital"](around:${radiusInMeters},${lat},${lon});
+      );
+      out center;
+    `;
+
+      const response = await fetch("https://overpass-api.de/api/interpreter", {
+        method: "POST",
+        body: query,
+      });
+
+      const data = await response.json();
+
+      const hospitalsWithDistance = (data.elements || [])
+        .map((hospital: any): NearbyHospital | null => {
+          const hospitalLat = hospital.lat ?? hospital.center?.lat;
+          const hospitalLon = hospital.lon ?? hospital.center?.lon;
+          const name = hospital.tags?.name || "Unnamed Hospital";
+
+          if (hospitalLat == null || hospitalLon == null) return null;
+
+          const distance = calculateDistance(lat, lon, hospitalLat, hospitalLon);
+          console.log(`Hospital: ${name}, Location: (${hospitalLat}, ${hospitalLon}), Distance: ${distance} km`);
+
+          return {
+            name,
+            lat: hospitalLat,
+            lon: hospitalLon,
+            distance,
+          };
+        })
+        .filter((hospital): hospital is NearbyHospital => hospital !== null);
+
+      // ✅ Final cast here before sort to fully satisfy TypeScript
+      const sortedHospitals = [...hospitalsWithDistance as NearbyHospital[]]
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, 10);
+
+
+      setHospitals(sortedHospitals);
+    } catch (error) {
+      console.error("Failed to fetch hospitals:", error);
+    }
+  };
+
 
   const handleSendMessage = async () => {
     if (inputValue.trim()) {
       const userMessage = inputValue;
-      setMessages([...messages, { type: 'user', content: userMessage }]);
+      setMessages((prev) => [...prev, { type: 'user', content: userMessage }]);
       setInputValue('');
 
       try {
@@ -138,7 +288,14 @@ const AISymptomChecker: React.FC = () => {
         const data = await response.json();
 
         if (data.success) {
-          setMessages(prev => [...prev, { type: 'bot', content: data.aiReply }]);
+          const botReply = data.aiReply;
+
+          // Add this section 👇
+          if (checkForEmergency(botReply)) {
+            setIsEmergency(true);
+            requestUserLocation();
+          }
+          setMessages(prev => [...prev, { type: 'bot', content: botReply }]);
         } else {
           setMessages(prev => [...prev, { type: 'bot', content: 'Sorry, I could not process that.' }]);
         }
@@ -159,10 +316,12 @@ const AISymptomChecker: React.FC = () => {
             {messages.map((message, index) => (
               <div key={index} className={`mb-4 ${message.type === 'user' ? 'text-right' : 'text-left'}`}>
                 <div className={`inline-block p-3 rounded-2xl max-w-xs ${message.type === 'user'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 shadow-sm border border-gray-200 dark:border-gray-600'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 shadow-sm border border-gray-200 dark:border-gray-600'
                   }`}>
-                  {message.content}
+                  {message.content.split('\n').map((line, index) => (
+                    <p key={index} className="mb-2">{line}</p>
+                  ))}
                 </div>
               </div>
             ))}
@@ -197,27 +356,48 @@ const AISymptomChecker: React.FC = () => {
           <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-6 border border-blue-200 dark:border-blue-800">
             <h4 className="font-semibold text-gray-900 dark:text-white mb-4">Nearby Healthcare</h4>
             <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                <div className="flex items-center">
-                  <MapPin className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
-                  <div>
-                    <div className="font-medium text-sm text-gray-900 dark:text-white">City Hospital</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">0.8 miles away</div>
+              {isEmergency && hospitals.length > 0 ? (
+                hospitals.map((hospital, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <MapPin className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                      <div>
+                        {/* Hospital Name as clickable link */}
+                        <a
+                          href={`https://www.google.com/maps?q=${hospital.lat},${hospital.lon}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-sm text-blue-600 hover:underline dark:text-blue-400"
+                        >
+                          {hospital.name}
+                        </a>
+
+                        {/* Distance from user */}
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {hospital.distance.toFixed(2)} km away
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Nearby/Far badge */}
+                    <span className={`text-xs font-medium ${hospital.distance < 10
+                      ? 'text-green-600 dark:text-green-400'
+                      : 'text-yellow-600 dark:text-yellow-400'
+                      }`}>
+                      {hospital.distance < 10 ? 'Live Nearby' : 'Far'}
+                    </span>
                   </div>
+                ))
+              ) : (
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  No hospital data found or not an emergency.
                 </div>
-                <div className="text-green-600 dark:text-green-400 text-xs font-medium">Open 24/7</div>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                <div className="flex items-center">
-                  <MapPin className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
-                  <div>
-                    <div className="font-medium text-sm text-gray-900 dark:text-white">MedCare Clinic</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">1.2 miles away</div>
-                  </div>
-                </div>
-                <div className="text-orange-600 dark:text-orange-400 text-xs font-medium">Closes 6 PM</div>
-              </div>
+              )}
             </div>
+
           </div>
         </div>
       </div>
@@ -229,29 +409,38 @@ const DiseaseEncyclopedia: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDisease, setSelectedDisease] = useState<Disease | null>(null);
 
-  const diseases: Disease[] = [
-    {
-      name: "Common Cold",
-      category: "Respiratory",
-      symptoms: ["Runny nose", "Cough", "Sore throat", "Fatigue"],
-      progression: ["Day 1-2: Throat irritation", "Day 3-4: Peak symptoms", "Day 5-7: Recovery"],
-      severity: "Mild"
-    },
-    {
-      name: "Migraine",
-      category: "Neurological",
-      symptoms: ["Severe headache", "Nausea", "Light sensitivity", "Visual disturbances"],
-      progression: ["Prodrome: 1-2 days before", "Aura: 20-60 minutes", "Headache: 4-72 hours", "Recovery"],
-      severity: "Moderate"
-    },
-    {
-      name: "Hypertension",
-      category: "Cardiovascular",
-      symptoms: ["Often asymptomatic", "Headaches", "Dizziness", "Chest pain"],
-      progression: ["Stage 1: 130-139/80-89", "Stage 2: 140/90 or higher", "Crisis: >180/120"],
-      severity: "Serious"
+  const [diseases, setDiseases] = useState<Disease[]>([]);
+
+  const getRecommendation = (severity: Disease['severity']) => {
+    switch (severity) {
+      case 'Mild':
+        return "This condition is usually mild. You can often manage it at home, but consult a doctor if symptoms worsen.";
+      case 'Moderate':
+        return "This condition may require medical attention. Please consult a healthcare professional for proper guidance.";
+      case 'Serious':
+        return "This condition is serious. Seek immediate medical attention or contact a healthcare provider right away.";
+      default:
+        return "";
     }
-  ];
+  };
+
+  // Fetch diseases from backend on searchTerm change
+  useEffect(() => {
+    const fetchDiseases = async () => {
+      try {
+        const res = await fetch(`http://localhost:5000/api/diseases?search=${searchTerm}`);
+        const data = await res.json();
+        if (data.success) {
+          setDiseases(data.diseases);
+        }
+      } catch (error) {
+        console.error("Failed to fetch diseases:", error);
+      }
+    };
+
+    fetchDiseases();
+  }, [searchTerm]);
+
 
   const filteredDiseases = diseases.filter(d =>
     d.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -273,8 +462,14 @@ const DiseaseEncyclopedia: React.FC = () => {
             />
           </div>
 
-          <div className="space-y-3">
-            {filteredDiseases.map((disease, index) => (
+          <div
+            className={`space-y-3 ${searchTerm && filteredDiseases.length > 3 ? 'overflow-y-auto max-h-96 pr-2' : ''}`}
+          >
+            {(searchTerm ? filteredDiseases : [
+              diseases.find(d => d.severity === 'Mild'),
+              diseases.find(d => d.severity === 'Moderate'),
+              diseases.find(d => d.severity === 'Serious')
+            ]).filter((disease): disease is Disease => Boolean(disease)).map((disease, index) => (
               <button
                 key={index}
                 onClick={() => setSelectedDisease(disease)}
@@ -282,8 +477,11 @@ const DiseaseEncyclopedia: React.FC = () => {
               >
                 <div className="font-medium text-gray-900 dark:text-white">{disease.name}</div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">{disease.category}</div>
-                <div className={`text-xs font-medium mt-1 ${disease.severity === 'Mild' ? 'text-green-600 dark:text-green-400' :
-                    disease.severity === 'Moderate' ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'
+                <div className={`text-xs font-medium mt-1 ${disease.severity === 'Mild'
+                  ? 'text-green-600 dark:text-green-400'
+                  : disease.severity === 'Moderate'
+                    ? 'text-yellow-600 dark:text-yellow-400'
+                    : 'text-red-600 dark:text-red-400'
                   }`}>
                   {disease.severity}
                 </div>
@@ -302,11 +500,19 @@ const DiseaseEncyclopedia: React.FC = () => {
                     {selectedDisease.category}
                   </span>
                   <span className={`px-3 py-1 rounded-full text-sm font-medium ${selectedDisease.severity === 'Mild' ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200' :
-                      selectedDisease.severity === 'Moderate' ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200' : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
+                    selectedDisease.severity === 'Moderate' ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200' : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
                     }`}>
                     {selectedDisease.severity}
                   </span>
                 </div>
+              </div>
+              <div className={`p-4 rounded-xl border ${selectedDisease.severity === 'Mild'
+                ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
+                : selectedDisease.severity === 'Moderate'
+                  ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-200'
+                  : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
+                }`}>
+                <strong>Recommendation:</strong> {getRecommendation(selectedDisease.severity)}
               </div>
 
               <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-6 border border-blue-200 dark:border-blue-800">
@@ -352,6 +558,9 @@ const DiseaseEncyclopedia: React.FC = () => {
 const MedicineScanner: React.FC = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [scannedMedicine, setScannedMedicine] = useState<Medicine | null>(null);
+  const [uploadedImage, setUploadedImage] = useState<File | null>(null);
+
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   const handleScan = () => {
     setIsScanning(true);
@@ -368,18 +577,52 @@ const MedicineScanner: React.FC = () => {
     }, 3000);
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadedImage(file);
+    setIsScanning(true);
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const response = await fetch('http://localhost:5000/api/scan', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setScannedMedicine(result.medicine);
+      } else {
+        setScannedMedicine(null);            // Clear previous result
+        alert(result.message || "No matching medicine found.");
+      }
+    } catch (error) {
+      console.error("Scan failed:", error);
+      alert("Error scanning the image.");
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+
   return (
     <div className="p-8">
       <div className="grid lg:grid-cols-2 gap-8">
         <div>
           <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Medicine Scanner</h3>
+
           <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl p-8 text-center mb-6 border border-gray-200 dark:border-gray-700">
             {isScanning ? (
               <div className="space-y-4">
                 <div className="animate-spin mx-auto">
                   <Camera className="h-16 w-16 text-green-600 dark:text-green-400" />
                 </div>
-                <p className="text-gray-600 dark:text-gray-400">Scanning medication...</p>
+                <p className="text-gray-600 dark:text-gray-400">Analyzing medication...</p>
                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                   <div className="bg-green-600 h-2 rounded-full animate-pulse" style={{ width: '60%' }}></div>
                 </div>
@@ -387,13 +630,36 @@ const MedicineScanner: React.FC = () => {
             ) : (
               <div className="space-y-4">
                 <Camera className="h-16 w-16 text-gray-400 dark:text-gray-500 mx-auto" />
-                <p className="text-gray-600 dark:text-gray-400">Position medication in camera view</p>
-                <button
-                  onClick={handleScan}
-                  className="bg-green-600 text-white px-8 py-3 rounded-xl hover:bg-green-700 transition-colors duration-200 font-medium"
-                >
-                  Start Scanning
-                </button>
+                <p className="text-gray-600 dark:text-gray-400">Upload or scan a medicine strip</p>
+
+                <div className="flex justify-center">
+                  <label className="cursor-pointer inline-block bg-green-600 text-white px-6 py-3 rounded-xl hover:bg-green-700 transition-colors duration-200 font-medium">
+                    Choose Image
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                {isMobile && (
+                  <button
+                    onClick={handleScan}
+                    className="bg-green-600 text-white px-8 py-3 rounded-xl hover:bg-green-700 transition-colors duration-200 font-medium w-full"
+                  >
+                    Start Live Scan
+                  </button>
+                )}
+
+                {uploadedImage && (
+                  <img
+                    src={URL.createObjectURL(uploadedImage)}
+                    alt="Uploaded"
+                    className="mt-4 mx-auto h-28 rounded-lg border border-gray-300 dark:border-gray-600 object-contain"
+                  />
+                )}
               </div>
             )}
           </div>
@@ -403,7 +669,9 @@ const MedicineScanner: React.FC = () => {
               <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mr-2" />
               <span className="font-semibold text-yellow-800 dark:text-yellow-400">Important</span>
             </div>
-            <p className="text-yellow-700 dark:text-yellow-300 text-sm">Always consult with a healthcare professional before taking any medication.</p>
+            <p className="text-yellow-700 dark:text-yellow-300 text-sm">
+              Always consult with a healthcare professional before taking any medication.
+            </p>
           </div>
         </div>
 
@@ -460,5 +728,6 @@ const MedicineScanner: React.FC = () => {
     </div>
   );
 };
+
 
 export default Features;
