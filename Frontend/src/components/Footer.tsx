@@ -3,7 +3,7 @@ import { Heart, Mail, Phone, MapPin, Facebook, Twitter, Instagram, Linkedin, You
 
 const Footer: React.FC = () => {
   return (
-    <footer className="bg-gray-900 dark:bg-black text-white transition-colors duration-300">
+    <footer id='contact' className="bg-gray-900 dark:bg-black text-white transition-colors duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Main Footer Content */}
         <div className="py-16">
@@ -11,10 +11,8 @@ const Footer: React.FC = () => {
             {/* Company Info */}
             <div className="space-y-6">
               <div className="flex items-center space-x-2">
-                <div className="bg-blue-600 p-2 rounded-lg">
-                  <Heart className="h-6 w-6 text-white" />
-                </div>
-                <span className="text-xl font-bold">HealthCare</span>
+                <img src="/vitalsync logo.png" alt="logo" height={35} width={35} />
+                <span className="text-xl font-bold">VitalSync</span>
               </div>
               <p className="text-gray-400 leading-relaxed">
                 Transforming healthcare through innovative AI-powered solutions. 

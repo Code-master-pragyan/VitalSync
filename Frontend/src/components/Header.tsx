@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { User, Heart, Menu, Sun, Moon } from 'lucide-react';
-import AuthModal from './AuthModal';
 
 interface HeaderProps {
   onToggleSidebar: () => void;
@@ -11,14 +11,10 @@ interface HeaderProps {
   toast: any;
 }
 
-const Header: React.FC<HeaderProps> = ({ onToggleSidebar, isDarkMode, onToggleDarkMode,user,setUser,toast }) => {
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+const Header: React.FC<HeaderProps> = ({ onToggleSidebar, isDarkMode, onToggleDarkMode, user, setUser, toast }) => {
 
-  const openAuthModal = (mode: 'login' | 'signup') => {
-    setAuthMode(mode);
-    setAuthModalOpen(true);
-  };
+  const navigate = useNavigate();
+
 
   return (
     <>
@@ -27,10 +23,10 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, isDarkMode, onToggleDa
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
             <div className="flex items-center space-x-2">
-              <div className="bg-blue-600 p-2 rounded-lg">
-                <Heart className="h-6 w-6 text-white" />
-              </div>
-              <span className="text-xl font-bold text-gray-900 dark:text-white">HealthCare</span>
+              <a href="/" className="flex items-center space-x-2">
+                <img src="/vitalsync logo.png" alt="logo" height={35} width={35} />
+                <span className="text-xl font-bold text-gray-900 dark:text-white">VitalSync</span>
+              </a>
             </div>
 
             {/* Navigation Menu */}
@@ -68,13 +64,13 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, isDarkMode, onToggleDa
               {!user ? (
                 <div className="hidden sm:flex items-center space-x-3">
                   <button
-                    onClick={() => openAuthModal('login')}
+                    onClick={() => navigate('/auth', { state: { mode: 'login' } })}
                     className="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200 font-medium"
                   >
                     Log In
                   </button>
                   <button
-                    onClick={() => openAuthModal('signup')}
+                    onClick={() => navigate('/auth', { state: { mode: 'signup' } })}
                     className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium"
                   >
                     Sign Up
@@ -85,6 +81,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, isDarkMode, onToggleDa
                   Hello, {user.fullName.split(' ')[0]}
                 </span>
               )}
+
 
               {/* User Profile Button */}
               <button
@@ -102,15 +99,6 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, isDarkMode, onToggleDa
           </div>
         </div>
       </header>
-
-      {/* Auth Modal */}
-      <AuthModal
-        isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
-        initialMode={authMode}
-        setUser={setUser}
-        toast={toast}
-      />
     </>
   );
 };

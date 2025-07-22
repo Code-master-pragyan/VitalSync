@@ -15,7 +15,8 @@ import cors from 'cors';
 import authRoutes from './routes/auth.js';
 import aiRoutes from './routes/ai.js';
 import diseaseRoutes from './routes/diseaseRoutes.js';
-import scanRoutes from "./routes/scan.js"
+import scanRoutes from "./routes/scan.js";
+import locationRoutes from './routes/location.js';
 
 const app = express();
 const PORT = 5000;
@@ -24,7 +25,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // MongoDB connection
-mongoose.connect('mongodb://127.0.0.1:27017/healthcare', {
+mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true
 }).then(() => console.log('✅ MongoDB connected'))
@@ -41,10 +42,10 @@ app.use(cors({
 
 // Sessions
 app.use(session({
-  secret: 'supersecretkey', // change this to env var in prod
+  secret: process.env.SESSION_SECRET, 
   resave: false,
   saveUninitialized: false,
-  store: MongoStore.create({ mongoUrl: 'mongodb://127.0.0.1:27017/healthcare' }),
+  store: MongoStore.create({ mongoUrl: process.env.MONGO_URI }),
   cookie: { maxAge: 1000 * 60 * 60 * 24 } // 1 day
 }));
 
@@ -79,6 +80,7 @@ app.use('/api', authRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/diseases', diseaseRoutes);
 app.use('/api/scan', scanRoutes);
+app.use("/api/location", locationRoutes);
 
 // Start
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

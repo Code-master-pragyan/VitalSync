@@ -27,7 +27,7 @@ router.post('/', upload.single('image'), async (req, res) => {
     const medicineData = await fetchMedicineInfo(extractedText);
 
     // // Delete file after processing
-    // fs.unlinkSync(imagePath);
+    fs.unlinkSync(imagePath);
 
     if (medicineData) {
       res.json({ success: true, medicine: medicineData });

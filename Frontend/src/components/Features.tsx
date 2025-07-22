@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Bot, BookOpen, Scan, MessageSquare, Search, Camera, MapPin, Clock, AlertTriangle, Pill, CheckCircle } from 'lucide-react';
 
 // Type definitions
@@ -46,7 +47,29 @@ const COLOR_CLASSES = {
 };
 
 const Features: React.FC = () => {
-  const [activeFeature, setActiveFeature] = useState(0);
+  const [hasInteracted, setHasInteracted] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = searchParams.get('tab');
+
+  const getFeatureIndex = () => {
+    if (tab === 'disease') return 1;
+    if (tab === 'scan') return 2;
+    return 0; // default to chat
+  };
+
+  const [activeFeature, setActiveFeature] = useState(getFeatureIndex());
+
+  useEffect(() => {
+    setActiveFeature(getFeatureIndex());
+  }, [tab]);
+
+  // Auto scroll to #features section when tab changes
+  useEffect(() => {
+    if (hasInteracted) {
+      document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [tab]);
+
 
   const features = [
     {
@@ -97,7 +120,11 @@ const Features: React.FC = () => {
             return (
               <button
                 key={feature.id}
-                onClick={() => setActiveFeature(feature.id)}
+                onClick={() => {
+                  const selectedTab = feature.id === 0 ? 'chat' : feature.id === 1 ? 'disease' : 'scan';
+                  setSearchParams({ tab: selectedTab });
+                  setHasInteracted(true);
+                }}
                 className={`flex items-center px-6 py-4 rounded-xl transition-all duration-300 ${isActive
                   ? `${colors.bg} text-white shadow-lg`
                   : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700'
@@ -116,7 +143,11 @@ const Features: React.FC = () => {
         </div>
 
         <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
-          {features[activeFeature].component}
+          {features.map((feature) => (
+            <div key={feature.id} className={activeFeature === feature.id ? 'block' : 'hidden'}>
+              {feature.component}
+            </div>
+          ))}
         </div>
       </div>
     </section>
@@ -129,10 +160,18 @@ const AISymptomChecker: React.FC = () => {
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isEmergency, setIsEmergency] = useState(false);
+  const [isBotTyping, setIsBotTyping] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number, lon: number } | null>(null);
   const [hospitals, setHospitals] = useState<NearbyHospital[]>([]);
 
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+  useEffect(() => {
+    const chatContainer = document.getElementById('chat-scroll');
+    if (chatContainer) {
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+  }, [messages]);
 
 
   const checkForEmergency = (reply: string) => {
@@ -148,6 +187,29 @@ const AISymptomChecker: React.FC = () => {
     return emergencyKeywords.some(keyword => reply.toLowerCase().includes(keyword));
   };
 
+  const fetchHospitalsFromBackend = async (placeName: string | { lat: number, lon: number }) => {
+    try {
+      const response = await fetch("http://localhost:5000/api/location/hospitals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ placeName })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setHospitals(data.hospitals);
+        setIsEmergency(true);
+      } else {
+        alert(data.message || "No hospitals found.");
+      }
+    } catch (error) {
+      console.error("❌ Hospital fetch failed:", error);
+      alert("Error getting hospital data.");
+    }
+  };
+
+
   const requestUserLocation = () => {
     if (isMobile && navigator.geolocation) {
       // 📱 Mobile: use device GPS
@@ -157,7 +219,7 @@ const AISymptomChecker: React.FC = () => {
           const lon = position.coords.longitude;
           console.log("📍 Mobile Location:", lat, lon);
           setUserLocation({ lat, lon });
-          fetchNearbyHospitals(lat, lon);
+          fetchHospitalsFromBackend({ lat, lon });
         },
         (error) => {
           console.error("❌ Mobile Geolocation failed:", error);
@@ -165,109 +227,12 @@ const AISymptomChecker: React.FC = () => {
       );
     } else {
       // 🖥️ Desktop: Ask for location name instead of lat/lon
-      const placeName = prompt("⚠️ Please enter your location name (e.g., Guwahati, Mumbai):");
-
+      const placeName = prompt("⚠️ Please enter your location name (e.g., Guwahati):");
       if (placeName) {
-        geocodePlaceName(placeName.trim());
+        fetchHospitalsFromBackend(placeName.trim());
       } else {
         console.error("No location name provided.");
       }
-    }
-  };
-
-  const geocodePlaceName = async (placeName: string) => {
-    try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(placeName)}&countrycodes=in`
-      );
-
-      const data = await response.json();
-
-      if (data.length > 0) {
-        const lat = parseFloat(data[0].lat);
-        const lon = parseFloat(data[0].lon);
-        console.log("🌍 Corrected Geocoded Location:", lat, lon);
-
-        setUserLocation({ lat, lon });
-        fetchNearbyHospitals(lat, lon);
-      } else {
-        console.error("❌ Location not found.");
-        alert("❌ Could not find location. Please try a valid place name.");
-      }
-    } catch (error) {
-      console.error("❌ Geocoding failed:", error);
-      alert("⚠️ Something went wrong while fetching location data.");
-    }
-  };
-
-
-
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 6371; // Earth's radius in KM
-    const dLat = (lat2 - lat1) * (Math.PI / 180);
-    const dLon = (lon2 - lon1) * (Math.PI / 180);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * (Math.PI / 180)) *
-      Math.cos(lat2 * (Math.PI / 180)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return parseFloat((R * c).toFixed(2)); // Round to 2 decimals
-  };
-
-
-  const fetchNearbyHospitals = async (lat: number, lon: number) => {
-    try {
-      const radiusInMeters = 50000;
-
-      const query = `
-      [out:json];
-      (
-        node["amenity"="hospital"](around:${radiusInMeters},${lat},${lon});
-        way["amenity"="hospital"](around:${radiusInMeters},${lat},${lon});
-        relation["amenity"="hospital"](around:${radiusInMeters},${lat},${lon});
-      );
-      out center;
-    `;
-
-      const response = await fetch("https://overpass-api.de/api/interpreter", {
-        method: "POST",
-        body: query,
-      });
-
-      const data = await response.json();
-
-      const hospitalsWithDistance = (data.elements || [])
-        .map((hospital: any): NearbyHospital | null => {
-          const hospitalLat = hospital.lat ?? hospital.center?.lat;
-          const hospitalLon = hospital.lon ?? hospital.center?.lon;
-          const name = hospital.tags?.name || "Unnamed Hospital";
-
-          if (hospitalLat == null || hospitalLon == null) return null;
-
-          const distance = calculateDistance(lat, lon, hospitalLat, hospitalLon);
-          console.log(`Hospital: ${name}, Location: (${hospitalLat}, ${hospitalLon}), Distance: ${distance} km`);
-
-          return {
-            name,
-            lat: hospitalLat,
-            lon: hospitalLon,
-            distance,
-          };
-        })
-        .filter((hospital): hospital is NearbyHospital => hospital !== null);
-
-      // ✅ Final cast here before sort to fully satisfy TypeScript
-      const sortedHospitals = [...hospitalsWithDistance as NearbyHospital[]]
-        .sort((a, b) => a.distance - b.distance)
-        .slice(0, 10);
-
-
-      setHospitals(sortedHospitals);
-    } catch (error) {
-      console.error("Failed to fetch hospitals:", error);
     }
   };
 
@@ -277,6 +242,7 @@ const AISymptomChecker: React.FC = () => {
       const userMessage = inputValue;
       setMessages((prev) => [...prev, { type: 'user', content: userMessage }]);
       setInputValue('');
+      setIsBotTyping(true);
 
       try {
         const response = await fetch('http://localhost:5000/api/ai/symptom-checker', {
@@ -290,16 +256,20 @@ const AISymptomChecker: React.FC = () => {
         if (data.success) {
           const botReply = data.aiReply;
 
-          // Add this section 👇
-          if (checkForEmergency(botReply)) {
-            setIsEmergency(true);
-            requestUserLocation();
-          }
-          setMessages(prev => [...prev, { type: 'bot', content: botReply }]);
+          setTimeout(() => {
+            setIsBotTyping(false);
+            if (checkForEmergency(botReply)) {
+              setIsEmergency(true);
+              requestUserLocation();
+            }
+            setMessages(prev => [...prev, { type: 'bot', content: botReply }]);
+          }, 5000);
         } else {
+          setIsBotTyping(false);
           setMessages(prev => [...prev, { type: 'bot', content: 'Sorry, I could not process that.' }]);
         }
       } catch (err) {
+        setIsBotTyping(false);
         console.error('Error:', err);
         setMessages(prev => [...prev, { type: 'bot', content: 'Server error occurred.' }]);
       }
@@ -309,35 +279,51 @@ const AISymptomChecker: React.FC = () => {
 
   return (
     <div className="p-8">
-      <div className="grid lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div>
           <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">AI Symptom Analysis</h3>
-          <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 h-96 overflow-y-auto mb-4 border border-gray-200 dark:border-gray-700">
+          <div
+            id="chat-scroll"
+            className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 min-h-[300px] sm:h-[400px] overflow-y-auto mb-4 border border-gray-200 dark:border-gray-700 scroll-smooth"
+          >
             {messages.map((message, index) => (
-              <div key={index} className={`mb-4 ${message.type === 'user' ? 'text-right' : 'text-left'}`}>
-                <div className={`inline-block p-3 rounded-2xl max-w-xs ${message.type === 'user'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 shadow-sm border border-gray-200 dark:border-gray-600'
-                  }`}>
-                  {message.content.split('\n').map((line, index) => (
-                    <p key={index} className="mb-2">{line}</p>
-                  ))}
+              <div
+                key={index}
+                className={`mb-4 flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`px-4 py-3 rounded-2xl break-words whitespace-pre-wrap leading-relaxed text-sm sm:text-base
+      ${message.type === 'user'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-600'}
+      max-w-full sm:max-w-[90%] md:max-w-[80%] lg:max-w-[75%]`}
+                >
+                  {message.content}
                 </div>
               </div>
             ))}
+
+            {isBotTyping && (
+              <div className="mb-4 flex justify-start">
+                <div className="px-4 py-3 rounded-2xl bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 text-sm sm:text-base animate-pulse">
+                  Thinking<span className="animate-bounce inline-block ml-1">...</span>
+                </div>
+              </div>
+            )}
           </div>
-          <div className="flex space-x-2">
+
+          <div className="flex flex-col sm:flex-row sm:space-x-2 space-y-2 sm:space-y-0 mt-2">
             <input
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               placeholder="Describe your symptoms..."
-              className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+              className="w-full px-4 py-3 text-sm border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
               onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
             />
             <button
               onClick={handleSendMessage}
-              className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors duration-200"
+              className="w-full sm:w-auto flex items-center justify-center bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-colors duration-200"
             >
               <MessageSquare className="h-5 w-5" />
             </button>
@@ -345,7 +331,7 @@ const AISymptomChecker: React.FC = () => {
         </div>
 
         <div className="space-y-6">
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 mt-14">
             <div className="flex items-center mb-2">
               <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 mr-2" />
               <span className="font-semibold text-red-800 dark:text-red-400">Emergency Warning</span>
@@ -355,7 +341,7 @@ const AISymptomChecker: React.FC = () => {
 
           <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-6 border border-blue-200 dark:border-blue-800">
             <h4 className="font-semibold text-gray-900 dark:text-white mb-4">Nearby Healthcare</h4>
-            <div className="space-y-3">
+            <div className="max-h-[250px] overflow-y-auto space-y-3 pr-1 scrollbar-thin scrollbar-thumb-blue-500 scrollbar-track-transparent">
               {isEmergency && hospitals.length > 0 ? (
                 hospitals.map((hospital, index) => (
                   <div
@@ -365,7 +351,6 @@ const AISymptomChecker: React.FC = () => {
                     <div className="flex items-center space-x-3">
                       <MapPin className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                       <div>
-                        {/* Hospital Name as clickable link */}
                         <a
                           href={`https://www.google.com/maps?q=${hospital.lat},${hospital.lon}`}
                           target="_blank"
@@ -374,19 +359,17 @@ const AISymptomChecker: React.FC = () => {
                         >
                           {hospital.name}
                         </a>
-
-                        {/* Distance from user */}
                         <div className="text-xs text-gray-500 dark:text-gray-400">
                           {hospital.distance.toFixed(2)} km away
                         </div>
                       </div>
                     </div>
-
-                    {/* Nearby/Far badge */}
-                    <span className={`text-xs font-medium ${hospital.distance < 10
-                      ? 'text-green-600 dark:text-green-400'
-                      : 'text-yellow-600 dark:text-yellow-400'
-                      }`}>
+                    <span
+                      className={`text-xs font-medium ${hospital.distance < 10
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-yellow-600 dark:text-yellow-400'
+                        }`}
+                    >
                       {hospital.distance < 10 ? 'Live Nearby' : 'Far'}
                     </span>
                   </div>
@@ -397,7 +380,6 @@ const AISymptomChecker: React.FC = () => {
                 </div>
               )}
             </div>
-
           </div>
         </div>
       </div>
