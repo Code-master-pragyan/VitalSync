@@ -4,7 +4,23 @@ import Disease from './models/Disease.js';
 
 dotenv.config();
 
-await mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/healthcare');
+async function seedDiseases() {
+  try {
+    await mongoose.connect(process.env.MONGO_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true
+    });
+
+    await Disease.deleteMany(); // Optional: Clears previous disease records
+
+    await Disease.insertMany(diseases);
+    console.log("✅ Diseases inserted to MongoDB Atlas");
+    process.exit();
+  } catch (err) {
+    console.error("❌ Seeding Error:", err);
+    process.exit(1);
+  }
+}
 
 const diseases = [
   // --- MILD ---
@@ -154,6 +170,4 @@ const diseases = [
   }
 ];
 
-await Disease.insertMany(diseases);
-console.log("✅ 20 diseases inserted to MongoDB");
-process.exit();
+seedDiseases();

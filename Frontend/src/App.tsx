@@ -34,7 +34,7 @@ function App() {
     }
 
     // Auto fetch current user if session exists
-    fetch('http://localhost:5000/api/current-user', {
+    fetch(`${import.meta.env.VITE_API_BASE_URL}/current-user`, {
       credentials: 'include',
     })
       .then(res => res.json())
@@ -59,7 +59,7 @@ function App() {
   };
 
   const handleLogout = () => {
-    fetch('http://localhost:5000/api/logout', {
+    fetch(`${import.meta.env.VITE_API_BASE_URL}/logout`, {
       credentials: 'include',
     })
       .then(res => res.json())

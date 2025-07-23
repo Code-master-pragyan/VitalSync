@@ -15,7 +15,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose,user,setUser,toast,on
   const [activeItem, setActiveItem] = useState<string | null>(null);
 
   const handleLogout = () => {
-    fetch('http://localhost:5000/api/logout', {
+    fetch(`${import.meta.env.VITE_API_BASE_URL}/logout`, {
       method: 'GET',
       credentials: 'include'
     })

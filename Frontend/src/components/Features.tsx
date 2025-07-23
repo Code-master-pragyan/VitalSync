@@ -189,7 +189,7 @@ const AISymptomChecker: React.FC = () => {
 
   const fetchHospitalsFromBackend = async (placeName: string | { lat: number, lon: number }) => {
     try {
-      const response = await fetch("http://localhost:5000/api/location/hospitals", {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/location/hospitals`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ placeName })
@@ -245,7 +245,7 @@ const AISymptomChecker: React.FC = () => {
       setIsBotTyping(true);
 
       try {
-        const response = await fetch('http://localhost:5000/api/ai/symptom-checker', {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/ai/symptom-checker`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
@@ -410,7 +410,7 @@ const DiseaseEncyclopedia: React.FC = () => {
   useEffect(() => {
     const fetchDiseases = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/diseases?search=${searchTerm}`);
+        const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/diseases?search=${encodeURIComponent(searchTerm)}`);
         const data = await res.json();
         if (data.success) {
           setDiseases(data.diseases);
@@ -570,7 +570,7 @@ const MedicineScanner: React.FC = () => {
     formData.append('image', file);
 
     try {
-      const response = await fetch('http://localhost:5000/api/scan', {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/scan`, {
         method: 'POST',
         body: formData,
       });
