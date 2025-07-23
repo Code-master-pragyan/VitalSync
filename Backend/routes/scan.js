@@ -1,39 +1,34 @@
 import express from "express";
 import multer from "multer";
 import tesseract from "tesseract.js";
-import fs from "fs";
 
 const router = express.Router();
 
 import fetchMedicineInfo from "../utils/fetchMedicineInfo.js";
 
-// Setup multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
-  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
-});
-const upload = multer({ storage });
+// Setup multer with memory storage
+const upload = multer({ storage: multer.memoryStorage() });
 
 router.post('/', upload.single('image'), async (req, res) => {
   try {
-    const imagePath = req.file.path;
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "No image file uploaded." });
+    }
 
-    // Perform OCR on the image
-    const result = await tesseract.recognize(imagePath, 'eng');
+    // Perform OCR directly from buffer
+    const result = await tesseract.recognize(req.file.buffer, 'eng');
     const extractedText = result.data.text;
     console.log('🔍 OCR Result:', extractedText);
 
-    // Fetch medicine info using extracted name
+    // Use OCR result to find medicine info
     const medicineData = await fetchMedicineInfo(extractedText);
-
-    // // Delete file after processing
-    fs.unlinkSync(imagePath);
 
     if (medicineData) {
       res.json({ success: true, medicine: medicineData });
     } else {
       res.json({ success: false, message: "Medicine info not found." });
     }
+
   } catch (err) {
     console.error('❌ OCR Error:', err);
     res.status(500).json({ success: false, message: "Internal server error." });
@@ -41,3 +36,4 @@ router.post('/', upload.single('image'), async (req, res) => {
 });
 
 export default router;
+
