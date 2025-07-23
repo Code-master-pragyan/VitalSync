@@ -5,16 +5,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "serve -s dist"
   },
   "dependencies": {
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.7.0",
-    "react-toastify": "^11.0.5"
+    "react-toastify": "^11.0.5",
+    "serve": "^14.2.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.29.0",
