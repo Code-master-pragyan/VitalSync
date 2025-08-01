@@ -267,5 +267,5 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 ---
 
-**VitalSync** was created during the 2023 HealthTech Hackathon by Team NovaMed. For inquiries contact: dev@vitalsync.health
+**VitalSync** was created during the 2023 HealthTech Hackathon by Team NEXUS. For inquiries contact: dev@vitalsync.health
 
