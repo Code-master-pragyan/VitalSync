@@ -13,7 +13,7 @@
 VitalSync is an AI-powered healthcare platform that provides intelligent symptom analysis, emergency response guidance, and comprehensive disease information. Built for a hackathon demonstration, this solution bridges the gap between initial symptom assessment and professional medical care.
 
 ## 📽️ Live Demo
-[Access the live demo here](https://vitalsync-demo.com) *(Note: Hackathon demo link would go here)*
+[Access the live demo here](https://youtu.be/EEmNplJKwCc?si=z0MRB8aU7kFLt72m) *(Note: Hackathon demo link would go here)*
 
 ## 🚀 Introduction  
 
