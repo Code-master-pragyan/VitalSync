@@ -31,7 +31,7 @@ router.post('/symptom-checker', async (req, res) => {
       agent: agent,
       body: JSON.stringify({
         model: 'openai/gpt-4o',
-        max_tokens: 512, // or another model you prefer
+        max_tokens: 200, // or another model you prefer
         messages: [
           {
             role: 'system',
