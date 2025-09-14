@@ -20,10 +20,14 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 
 router.post("/hospitals", async (req, res) => {
   try {
+    console.log("📍 Incoming request body:", req.body);
     let lat, lon;
     const input = req.body.placeName;
 
-    if (!input) return res.status(400).json({ success: false, message: "Missing location." });
+    if (!input) {
+      console.log("⚠️ Missing location in request.");
+      return res.status(400).json({ success: false, message: "Missing location." });
+    }
 
     if (typeof input === 'object' && input.lat && input.lon) {
       lat = input.lat;
