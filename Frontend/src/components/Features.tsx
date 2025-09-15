@@ -189,6 +189,11 @@ const AISymptomChecker: React.FC = () => {
 
   const fetchHospitalsFromBackend = async (placeName: string | { lat: number, lon: number }) => {
     try {
+
+      // Reset UI state before fetch
+      setHospitals([]);
+      setIsEmergency(false);
+
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/location/hospitals`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -197,22 +202,29 @@ const AISymptomChecker: React.FC = () => {
 
       const data = await response.json();
 
-      if (data.success) {
+      if (data.success && data.hospitals && data.hospitals.length > 0) {
         setHospitals(data.hospitals);
-        setIsEmergency(true);
+        setIsEmergency(true);  // Show hospital list only if results found
       } else {
-        alert(data.message || "No hospitals found.");
+        setHospitals([]);
+        setIsEmergency(false);
+        alert(data.message || "No hospitals found near your location.");
       }
     } catch (error) {
       console.error("❌ Hospital fetch failed:", error);
-      alert("Error getting hospital data.");
+      setHospitals([]);
+      setIsEmergency(false);
+      alert("Error getting hospital data. Please try again later.");
     }
+
   };
 
 
   const requestUserLocation = () => {
+    console.log("Requesting user location...");
+
     if (isMobile && navigator.geolocation) {
-      // 📱 Mobile: use device GPS
+      // 📱 Mobile: Use device GPS
       navigator.geolocation.getCurrentPosition(
         position => {
           const lat = position.coords.latitude;
@@ -221,20 +233,27 @@ const AISymptomChecker: React.FC = () => {
           setUserLocation({ lat, lon });
           fetchHospitalsFromBackend({ lat, lon });
         },
-        (error) => {
+        error => {
           console.error("❌ Mobile Geolocation failed:", error);
+          alert("Could not get your location from GPS. Please enter your location manually.");
+          // For mobile fallback, ask for place name manually as well (optional)
         }
       );
     } else {
       // 🖥️ Desktop: Ask for location name instead of lat/lon
       const placeName = prompt("⚠️ Please enter your location name (e.g., Guwahati):");
-      if (placeName) {
+      if (placeName && placeName.trim().length > 0) {
+        console.log("📍 Desktop location input:", placeName);
         fetchHospitalsFromBackend(placeName.trim());
       } else {
         console.error("No location name provided.");
+        setHospitals([]);                    // Clear any previous hospital results
+        setIsEmergency(false);               // Do not show hospital list
+        alert("No location provided. Cannot show nearby hospitals.");
       }
     }
   };
+
 
 
   const handleSendMessage = async () => {
